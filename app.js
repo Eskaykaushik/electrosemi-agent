@@ -24,76 +24,275 @@ const cartTotalEl = document.getElementById("cartTotal");
 const cartForm = document.getElementById("cartForm");
 const cartStatusEl = document.getElementById("cartStatus");
 const overlay = document.getElementById("overlay");
+const scrollIndicator = document.getElementById("scrollIndicator");
+const scrollBtn = document.getElementById("scrollBtn");
+const srAnnounce = document.getElementById("srAnnounce");
 
 let products = [];
 const cart = new Map();
 const chatHistory = [];
 const cardButtons = new Map();
+let previousScrollHeight = 0;
+let isUserNearBottom = true;
+let chatStarted = false;
+let lastMsgRole = null;
+
+// ---------- helpers ----------
+function announce(text) {
+  srAnnounce.textContent = "";
+  requestAnimationFrame(function () { srAnnounce.textContent = text; });
+}
+
+function formatTime() {
+  var now = new Date();
+  var h = now.getHours();
+  var m = now.getMinutes();
+  var ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return h + ":" + (m < 10 ? "0" : "") + m + " " + ampm;
+}
+
+function getCategoryColor(cat) {
+  var c = (cat || "").toLowerCase();
+  if (c.indexOf("micro") !== -1) return "Microcontroller";
+  if (c.indexOf("wireless") !== -1 || c.indexOf("wifi") !== -1) return "Wireless";
+  if (c.indexOf("sbc") !== -1 || c.indexOf("raspberry") !== -1) return "SBC";
+  return "default";
+}
+
+function getStockClass(stock) {
+  if (stock <= 0) return "out";
+  if (stock < 200) return "low";
+  return "ok";
+}
+
+function getStockLabel(stock) {
+  if (stock <= 0) return "Out of stock";
+  if (stock < 200) return stock + " left";
+  return stock + " in stock";
+}
+
+// ---------- scroll management ----------
+function scrollToBottom() {
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+messagesEl.addEventListener("scroll", function () {
+  var diff = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight;
+  isUserNearBottom = diff < 80;
+  if (isUserNearBottom) {
+    scrollIndicator.hidden = true;
+  }
+});
+
+scrollBtn.addEventListener("click", function () {
+  scrollToBottom();
+  scrollIndicator.hidden = true;
+  inputEl.focus();
+});
+
+function checkAutoScroll() {
+  if (isUserNearBottom) {
+    scrollToBottom();
+  } else {
+    scrollIndicator.hidden = false;
+  }
+}
 
 // ---------- rendering ----------
-function addMessage(role, contentNode) {
-  const el = document.createElement("div");
+function addMessage(role, contentNode, opts) {
+  opts = opts || {};
+  var el = document.createElement("div");
   el.className = "msg " + role;
+
+  if (opts.grouped) {
+    el.classList.add("msg-grouped");
+  }
+
   el.appendChild(contentNode);
+
+  if (opts.time !== false) {
+    var timeEl = document.createElement("div");
+    timeEl.className = "msg-time";
+    timeEl.textContent = formatTime();
+    el.appendChild(timeEl);
+  }
+
   messagesEl.appendChild(el);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+  checkAutoScroll();
   return el;
 }
 
 function textNode(text) {
-  const d = document.createElement("div");
+  var d = document.createElement("div");
   d.textContent = text;
   return d;
 }
 
 function typingNode() {
-  const d = document.createElement("div");
+  var d = document.createElement("div");
   d.className = "typing";
   d.innerHTML = "<span></span><span></span><span></span>";
   return d;
 }
 
+// ---------- suggestion chips ----------
+function createChip(text, icon) {
+  var chip = document.createElement("button");
+  chip.type = "button";
+  chip.className = "chip";
+  if (icon) {
+    var iconSpan = document.createElement("span");
+    iconSpan.className = "chip-icon";
+    iconSpan.textContent = icon;
+    chip.appendChild(iconSpan);
+  }
+  chip.appendChild(document.createTextNode(text));
+  chip.addEventListener("click", function () {
+    inputEl.value = text;
+    send();
+  });
+  return chip;
+}
+
+function renderChips(chips) {
+  var wrap = document.createElement("div");
+  wrap.className = "welcome-chips";
+  chips.forEach(function (c) {
+    wrap.appendChild(createChip(c.text, c.icon));
+  });
+  return wrap;
+}
+
+// ---------- inline follow-up chips ----------
+function renderInlineChips(chips) {
+  var wrap = document.createElement("div");
+  wrap.className = "inline-chips";
+  chips.forEach(function (c) {
+    var chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "inline-chip";
+    chip.textContent = c;
+    chip.addEventListener("click", function () {
+      inputEl.value = c;
+      send();
+    });
+    wrap.appendChild(chip);
+  });
+  return wrap;
+}
+
+// ---------- welcome screen ----------
+function renderWelcome() {
+  var welcome = document.createElement("div");
+  welcome.className = "welcome";
+  welcome.id = "welcomeScreen";
+
+  var icon = document.createElement("div");
+  icon.className = "welcome-icon";
+  icon.textContent = "\u26A1";
+
+  var h2 = document.createElement("h2");
+  h2.textContent = "ElectroSemi";
+
+  var p = document.createElement("p");
+  p.textContent = "Your AI-powered electronics sourcing assistant. Tell me what you\u2019re building, or pick a topic below.";
+
+  var chips = renderChips([
+    { text: "Browse catalog", icon: "\uD83D\uDCCB" },
+    { text: "I need STM32 controllers", icon: "\uD83E\uDDE0" },
+    { text: "Show wireless modules", icon: "\uD83D\uDCE1" },
+    { text: "I need a quote", icon: "\uD83D\uDCC8" },
+    { text: "What\u2019s in stock?", icon: "\uD83D\uDCE6" },
+  ]);
+
+  welcome.append(icon, h2, p, chips);
+  messagesEl.appendChild(welcome);
+}
+
+function removeWelcome() {
+  var w = document.getElementById("welcomeScreen");
+  if (w) w.remove();
+  chatStarted = true;
+}
+
+// ---------- skeleton loading ----------
+function showSkeletons(count) {
+  var wrap = document.createElement("div");
+  wrap.className = "skeleton-grid";
+  wrap.id = "skeletonLoader";
+  for (var i = 0; i < (count || 4); i++) {
+    var card = document.createElement("div");
+    card.className = "skeleton-card";
+    card.innerHTML =
+      '<div class="skeleton-line w40"></div>' +
+      '<div class="skeleton-line w80"></div>' +
+      '<div class="skeleton-line w60"></div>' +
+      '<div class="skeleton-line btn"></div>';
+    wrap.appendChild(card);
+  }
+  var container = document.createElement("div");
+  container.appendChild(wrap);
+  addMessage("ai", container);
+}
+
+function removeSkeletons() {
+  var el = document.getElementById("skeletonLoader");
+  if (el) el.closest(".msg").remove();
+}
+
+// ---------- product cards ----------
 function productCard(p) {
-  const card = document.createElement("div");
+  var catColor = getCategoryColor(p.category);
+  var stockCls = getStockClass(p.stock);
+  var card = document.createElement("div");
   card.className = "card";
+  card.setAttribute("data-cat", catColor);
   card.innerHTML =
     '<div class="card-top">' +
       '<span class="sku">' + p.sku + '</span>' +
-      '<span class="cat">' + p.category + '</span>' +
+      '<span class="cat" data-cat="' + catColor + '">' + p.category + '</span>' +
     '</div>' +
     '<div class="name">' + p.name + '</div>' +
     '<div class="desc">' + p.description + '</div>' +
     '<div class="card-bottom">' +
       '<div class="meta">' +
         '<span class="price">$' + p.price.toFixed(2) + '</span>' +
-        '<span class="stock">' + p.stock + ' in stock</span>' +
+        '<span class="stock ' + stockCls + '">' + getStockLabel(p.stock) + '</span>' +
       '</div>' +
     '</div>';
   var add = document.createElement("button");
   add.className = "btn add";
   add.textContent = "Add to cart";
+  add.setAttribute("aria-label", "Add " + p.name + " to cart");
   add.addEventListener("click", function () { addToCart(p); });
   cardButtons.set(p.sku, add);
   card.appendChild(add);
   return card;
 }
 
-function renderProducts(list, intro) {
-  const wrap = document.createElement("div");
-  const introEl = document.createElement("div");
+function renderProducts(list, intro, followUps) {
+  var wrap = document.createElement("div");
+  var introEl = document.createElement("div");
   introEl.className = "products-intro";
   introEl.textContent = intro || "Here are some products from our catalog:";
   wrap.appendChild(introEl);
-  const grid = document.createElement("div");
+  var grid = document.createElement("div");
   grid.className = "products";
   list.forEach(function (p) { grid.appendChild(productCard(p)); });
   wrap.appendChild(grid);
+
+  if (followUps && followUps.length) {
+    wrap.appendChild(renderInlineChips(followUps));
+  }
+
   addMessage("ai", wrap);
+  announce(list.length + " products shown");
 }
 
 // ---------- fallback mock ----------
 function mockReply(text) {
-  const t = text.toLowerCase();
+  var t = text.toLowerCase();
   if (/(stm32|microcontroller|mcu|controller|industrial)/.test(t)) {
     return "I can help with that. We stock a range of STM32 and other microcontrollers. Want me to show options you can add to a cart?";
   }
@@ -103,48 +302,49 @@ function mockReply(text) {
   if (/(price|quote|cost|how much)/.test(t)) {
     return "Add the parts you need to your cart and submit \u2014 our sales team will prepare a formal quote.";
   }
-  return "I'm your sourcing assistant. Tell me about your project (e.g. 'I need 500 STM32 controllers') and I'll suggest parts you can add to a cart.";
+  return "I\u2019m your sourcing assistant. Tell me about your project (e.g. \u2018I need 500 STM32 controllers\u2019) and I\u2019ll suggest parts you can add to a cart.";
 }
 
 // ---------- chat with backend ----------
 async function chatWithBackend(message) {
-  const res = await fetch(apiBase + "/api/electrosemi", {
+  var res = await fetch(apiBase + "/api/electrosemi", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message: message, history: chatHistory }),
   });
   if (!res.ok) throw new Error("Backend returned " + res.status);
-  const data = await res.json();
+  var data = await res.json();
   return data.response || "";
 }
 
 // ---------- products ----------
 async function loadProducts() {
   if (products.length) return products;
-  const res = await fetch("./products.json");
+  var res = await fetch("./products.json");
   products = await res.json();
   return products;
 }
 
 function filterProducts(text) {
-  const q = text.toLowerCase();
+  var q = text.toLowerCase();
   return products.filter(function (p) {
-    return [p.name, p.description, p.category, p.sku].join(" ").toLowerCase().includes(q);
+    return [p.name, p.description, p.category, p.sku].join(" ").toLowerCase().indexOf(q) !== -1;
   });
 }
 
 // ---------- cart ----------
 function addToCart(p) {
-  const item = cart.get(p.sku) || { sku: p.sku, name: p.name, price: p.price, qty: 0 };
+  var item = cart.get(p.sku) || { sku: p.sku, name: p.name, price: p.price, qty: 0 };
   item.qty += 1;
   cart.set(p.sku, item);
   updateCardButtons();
   updateCart();
   flashStatus("Added " + p.sku + " to cart", "ok");
+  announce(p.name + " added to cart. Quantity: " + item.qty);
 }
 
 function changeQty(sku, delta) {
-  const item = cart.get(sku);
+  var item = cart.get(sku);
   if (!item) return;
   item.qty += delta;
   if (item.qty <= 0) cart.delete(sku);
@@ -159,6 +359,7 @@ function updateCardButtons() {
     if (item && item.qty > 0) {
       btn.textContent = "In cart (\u00B7 " + item.qty + ")";
       btn.classList.add("in-cart");
+      btn.setAttribute("aria-label", btn.getAttribute("aria-label").replace("Add ", "Add ") + " (already in cart, qty " + item.qty + ")");
     } else {
       btn.textContent = "Add to cart";
       btn.classList.remove("in-cart");
@@ -169,7 +370,15 @@ function updateCardButtons() {
 function updateCart() {
   var totalQty = 0;
   cart.forEach(function (i) { totalQty += i.qty; });
+  var prevCount = parseInt(cartCountEl.textContent) || 0;
   cartCountEl.textContent = totalQty;
+
+  if (totalQty > prevCount) {
+    cartCountEl.classList.remove("pop");
+    void cartCountEl.offsetWidth;
+    cartCountEl.classList.add("pop");
+  }
+
   cartItemsEl.innerHTML = "";
   if (cart.size === 0) {
     var e = document.createElement("div");
@@ -190,11 +399,14 @@ function updateCart() {
       qty.className = "qty";
       var minus = document.createElement("button");
       minus.textContent = "\u2212";
+      minus.setAttribute("aria-label", "Decrease quantity of " + i.name);
       minus.addEventListener("click", (function (sku) { return function () { changeQty(sku, -1); }; })(i.sku));
       var n = document.createElement("span");
       n.textContent = i.qty;
+      n.setAttribute("aria-label", "Quantity: " + i.qty);
       var plus = document.createElement("button");
       plus.textContent = "+";
+      plus.setAttribute("aria-label", "Increase quantity of " + i.name);
       plus.addEventListener("click", (function (sku) { return function () { changeQty(sku, 1); }; })(i.sku));
       qty.append(minus, n, plus);
       row.append(info, qty);
@@ -206,8 +418,44 @@ function updateCart() {
   cartTotalEl.textContent = "$" + totalPrice.toFixed(2);
 }
 
-function openCart() { cartDrawer.classList.add("open"); overlay.hidden = false; }
-function closeCart() { cartDrawer.classList.remove("open"); overlay.hidden = true; }
+// ---------- drawer focus trap ----------
+var lastFocusedElement = null;
+
+function openCart() {
+  lastFocusedElement = document.activeElement;
+  cartDrawer.classList.add("open");
+  cartDrawer.setAttribute("aria-hidden", "false");
+  overlay.hidden = false;
+  cartClose.focus();
+  document.addEventListener("keydown", trapFocus);
+  announce("Cart opened");
+}
+
+function closeCart() {
+  cartDrawer.classList.remove("open");
+  cartDrawer.setAttribute("aria-hidden", "true");
+  overlay.hidden = true;
+  document.removeEventListener("keydown", trapFocus);
+  if (lastFocusedElement) lastFocusedElement.focus();
+  announce("Cart closed");
+}
+
+function trapFocus(e) {
+  if (e.key === "Escape") {
+    closeCart();
+    return;
+  }
+  if (e.key !== "Tab") return;
+  var focusable = cartDrawer.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+  if (!focusable.length) return;
+  var first = focusable[0];
+  var last = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+}
 
 function flashStatus(msg, kind) {
   cartStatusEl.textContent = msg;
@@ -240,6 +488,7 @@ async function submitCart(customer) {
     if (!res.ok) throw new Error("Backend returned " + res.status);
     var data = await res.json();
     flashStatus(data.response || "Sent! Our sales team will follow up shortly.", "ok");
+    announce("Order submitted successfully");
     cart.clear();
     updateCardButtons();
     updateCart();
@@ -247,6 +496,7 @@ async function submitCart(customer) {
   } catch (err) {
     console.error("Order submit failed:", order, err);
     flashStatus("Backend not reachable yet \u2014 your request was recorded locally. (" + err.message + ")", "err");
+    announce("Order submission failed: " + err.message);
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = origText;
@@ -258,7 +508,12 @@ async function send() {
   var text = inputEl.value.trim();
   if (!text) return;
   inputEl.value = "";
-  addMessage("customer", textNode(text));
+  inputEl.style.height = "auto";
+  removeWelcome();
+
+  var grouped = lastMsgRole === "customer";
+  addMessage("customer", textNode(text), { grouped: grouped });
+  lastMsgRole = "customer";
 
   chatHistory.push({ role: "user", content: text });
 
@@ -282,9 +537,15 @@ async function send() {
     inputEl.focus();
   }
 
+  lastMsgRole = "ai";
+
   var matches = filterProducts(text);
   if (matches.length && /(need|want|looking|find|show|suggest|stm32|controller|wifi|part|buy)/.test(text.toLowerCase())) {
-    renderProducts(matches, "Based on your message, here are some matching parts:");
+    var followUps = [];
+    if (matches.length > 2) followUps.push("Show more options");
+    followUps.push("Compare prices");
+    followUps.push("Filter by category");
+    renderProducts(matches, "Based on your message, here are some matching parts:", followUps);
   }
 }
 
@@ -300,15 +561,19 @@ inputEl.addEventListener("input", function () {
 browseBtn.addEventListener("click", async function () {
   browseBtn.disabled = true;
   browseBtn.textContent = "Loading\u2026";
+  removeWelcome();
+  showSkeletons(4);
   try {
     await loadProducts();
-    renderProducts(products, "Our current catalog:");
+    removeSkeletons();
+    renderProducts(products, "Our current catalog:", ["Search by name", "Filter by category", "Show microcontrollers only"]);
   } catch (err) {
     console.error("Failed to load catalog:", err);
+    removeSkeletons();
     renderProducts([], "Failed to load catalog. Please try again later.");
   } finally {
     browseBtn.disabled = false;
-    browseBtn.textContent = "Browse catalog";
+    browseBtn.textContent = "Catalog";
   }
 });
 
@@ -327,6 +592,24 @@ cartForm.addEventListener("submit", function (e) {
 // ---------- init ----------
 (async function () {
   await loadProducts();
-  addMessage("ai", textNode("Hi! I'm the ElectroSemi sourcing assistant. Tell me what you're building, or tap \u201cBrowse catalog\u201d to see our parts."));
+  renderWelcome();
   updateCart();
+})();
+
+// ---------- iOS keyboard handling ----------
+// On iOS Safari, 100dvh includes the area behind the URL bar and virtual
+// keyboard. Listening to visualViewport events lets us resize the app
+// container to match the actual visible area so the composer stays visible.
+(function () {
+  var vv = window.visualViewport;
+  if (!vv) return;
+  var app = document.querySelector(".app");
+
+  function syncHeight() {
+    app.style.height = vv.height + "px";
+  }
+
+  vv.addEventListener("resize", syncHeight);
+  vv.addEventListener("scroll", syncHeight);
+  syncHeight();
 })();
