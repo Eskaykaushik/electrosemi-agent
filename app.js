@@ -36,6 +36,60 @@ let previousScrollHeight = 0;
 let isUserNearBottom = true;
 let chatStarted = false;
 let lastMsgRole = null;
+let typingAbort = null;
+
+// ---------- markdown ----------
+function renderMarkdown(text) {
+  if (typeof marked !== "undefined") {
+    return marked.parse(text);
+  }
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br>");
+}
+
+function markdownNode(text) {
+  var d = document.createElement("div");
+  d.className = "md-content";
+  d.innerHTML = renderMarkdown(text);
+  return d;
+}
+
+// ---------- typing effect ----------
+function typeText(el, fullText, opts) {
+  opts = opts || {};
+  var charsPerTick = opts.fast ? 4 : 1;
+  var delay = opts.fast ? 10 : 22;
+  var i = 0;
+  var done = false;
+  var aborted = false;
+
+  function tick() {
+    if (aborted) return;
+    i = Math.min(i + charsPerTick, fullText.length);
+    el.innerHTML = renderMarkdown(fullText.slice(0, i));
+    checkAutoScroll();
+    if (i < fullText.length) {
+      typingTimeout = setTimeout(tick, delay);
+    } else {
+      done = true;
+    }
+  }
+
+  var typingTimeout = setTimeout(tick, delay);
+
+  return {
+    skip: function () {
+      aborted = true;
+      clearTimeout(typingTimeout);
+      el.innerHTML = renderMarkdown(fullText);
+      done = true;
+    },
+    isDone: function () { return done; },
+  };
+}
 
 // ---------- helpers ----------
 function announce(text) {
@@ -133,6 +187,12 @@ function typingNode() {
   var d = document.createElement("div");
   d.className = "typing";
   d.innerHTML = "<span></span><span></span><span></span>";
+  return d;
+}
+
+function mdContainer() {
+  var d = document.createElement("div");
+  d.className = "md-content";
   return d;
 }
 
@@ -544,6 +604,7 @@ function handleToolCalls(toolCalls) {
 async function send() {
   var text = inputEl.value.trim();
   if (!text) return;
+  if (typingAbort && !typingAbort.isDone()) typingAbort.skip();
   inputEl.value = "";
   inputEl.style.height = "auto";
   removeWelcome();
@@ -563,7 +624,15 @@ async function send() {
     var result = await chatWithBackend(text);
     var reply = result.text;
     chatHistory.push({ role: "assistant", content: reply });
-    indicator.replaceChild(textNode(reply), indicator.firstChild);
+    var contentEl = mdContainer();
+    indicator.replaceChild(contentEl, indicator.firstChild);
+    typingAbort = typeText(contentEl, reply, {
+      fast: reply.length > 200,
+    });
+    indicator.addEventListener("click", function handler() {
+      if (typingAbort && !typingAbort.isDone()) typingAbort.skip();
+      indicator.removeEventListener("click", handler);
+    });
     addSuggestions(indicator);
     if (result.toolCalls.length) {
       handleToolCalls(result.toolCalls);
@@ -572,7 +641,15 @@ async function send() {
     console.warn("Backend unreachable, using mock reply:", err);
     var fallback = mockReply(text);
     chatHistory.push({ role: "assistant", content: fallback });
-    indicator.replaceChild(textNode(fallback), indicator.firstChild);
+    var contentEl = mdContainer();
+    indicator.replaceChild(contentEl, indicator.firstChild);
+    typingAbort = typeText(contentEl, fallback, {
+      fast: fallback.length > 200,
+    });
+    indicator.addEventListener("click", function handler() {
+      if (typingAbort && !typingAbort.isDone()) typingAbort.skip();
+      indicator.removeEventListener("click", handler);
+    });
     addSuggestions(indicator);
   } finally {
     sendBtn.disabled = false;
