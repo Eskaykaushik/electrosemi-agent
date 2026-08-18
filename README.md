@@ -11,19 +11,19 @@ The AI acts as the company's conversational representative while connecting to r
 ```text
 Customer
    ↓
-Conversation
+Conversation (Chat UI)
    ↓
-AI Agent
+AI Agent (kaushix-api)
    ↓
 ┌───────────────┐
-│ Product Search│
+│ Product Search│  ← catalog (frontend JSON now, backend later)
 │ Pricing       │
 │ Inventory     │
-│ Orders        │
+│ Orders        │  ← cart submit → email to sales team
 │ Support       │
 └───────────────┘
    ↓
-Business Action
+Business Action (kaushix-api → email)
    ↓
 Customer + Internal Team
 ```
@@ -31,6 +31,9 @@ Customer + Internal Team
 ## Key Features
 
 * Conversational product discovery
+* In-chat product catalog with selectable suggestions
+* Shopping cart with quantity control
+* Submit cart → email to the sales team (via backend)
 * Technical/product Q&A
 * Inventory and pricing lookup
 * Quote generation
@@ -49,16 +52,13 @@ Customer + Internal Team
 
 **AI**
 
-> I found a suitable part with 620 units available.
-> Would you like me to prepare a quote for 500 units?
+> I can help with that. We stock a range of STM32 and other microcontrollers. Want me to show options you can add to a cart?
 
-**Customer**
-
-> Yes.
+*(The assistant lists matching parts as selectable cards. The customer adds items to the cart and submits.)*
 
 **AI**
 
-> Quote created and sent to our sales team for approval. I'll update you here once it's approved.
+> Sent! Our sales team will follow up shortly with a formal quote.
 
 ## Architecture
 
@@ -66,22 +66,23 @@ Customer + Internal Team
              Customer
                 │
                 ▼
-        Conversation API
+        Conversation UI  (static site: HTML/CSS/JS)
                 │
-                ▼
-           AI Agent
-                │
-      ┌─────────┼─────────┐
-      ▼         ▼         ▼
-   Catalog   Inventory   Orders
-      │         │         │
-      └─────────┼─────────┘
-                ▼
-        Business Database
-                │
-                ▼
-        Email / Notifications
+      ┌─────────┼─────────────┐
+      ▼         ▼             ▼
+   Chat      Product       Cart
+   (mock)    Catalog       Submit
+             (products.json)
+                │             │
+                │             ▼
+                │        kaushix-api  ──► Email to sales team
+                ▼         (FastAPI)
+           /api/assistant (future)
 ```
+
+* **Frontend:** a static single-page chat app (no build step). Hosted on GitHub Pages.
+* **Backend:** [kaushix-api](https://github.com/Eskaykaushik/kaushix-api) (FastAPI). For now it receives the cart and emails the team; chat/LLM routing can be added later.
+* **Product data:** served from a local `products.json` in the frontend for the MVP. It will move behind the backend (real catalog / pgvector) later.
 
 ## Important Principle
 
@@ -101,27 +102,85 @@ The AI should never invent:
 * Delivery dates
 * Order status
 
+Product information shown to the customer comes from the real catalog (`products.json` now, backend later) — never from the model's imagination.
+
+## Frontend (this repo)
+
+Vanilla **HTML / CSS / JavaScript**, no bundler, no dependencies. It is served directly by GitHub Pages from the `master` branch root.
+
+### Files
+
+* `index.html` — chat layout, catalog browse, cart drawer.
+* `styles.css` — conversational UI styling.
+* `app.js` — chat logic, product fetching, cart state, and order submission.
+* `products.json` — sample electronics catalog.
+
+### Run locally
+
+```bash
+python3 -m http.server 8000
+# open http://localhost:8000
+```
+
+To point the cart submission at a different backend during local testing:
+
+```text
+http://localhost:8000/?api=http://localhost:8000
+```
+
+### Deploy
+
+In repo **Settings → Pages → Source**: deploy from a branch → `master` / `(root)`.
+The site goes live at `https://eskaykaushik.github.io/electrosemi-agent/`.
+
+## Backend Contract (kaushix-api)
+
+When the customer submits the cart, the frontend `POST`s to:
+
+```text
+POST {KAPSHIX_API_BASE}/api/electrosemi/orders
+Content-Type: application/json
+```
+
+```json
+{
+  "customer": { "name": "Jane Doe", "email": "jane@acme.com", "company": "Acme" },
+  "items": [
+    { "sku": "STM32F407VGT6", "name": "STM32F407VGT6 - ARM Cortex-M4 MCU", "quantity": 500, "unitPrice": 7.85 }
+  ],
+  "notes": "Industrial project, need by Q3."
+}
+```
+
+Expected response:
+
+```json
+{ "status": "received", "orderId": "..." }
+```
+
+The backend is responsible for validating the items and emailing the sales team. CORS is already enabled on kaushix-api (`allow_origins=["*"]`), so the Pages site can call it directly. The exact path/shape is adjustable since the backend lives in a separate repo.
+
 ## MVP
 
 Start with:
 
 1. Customer chat
-2. Product catalog + search
+2. Product catalog + search (in-chat suggestions)
 3. AI product Q&A
-4. Inventory lookup
-5. Quote generation
-6. Order creation
+4. Inventory lookup (catalog stock)
+5. Quote generation (cart submit → team email)
+6. Order creation (backend)
 7. Email notification to the team
 
 ## Suggested Stack
 
-* **Backend:** Python + FastAPI
-* **Database:** PostgreSQL
-* **Vector Search:** pgvector
-* **Frontend:** React + TypeScript
-* **AI:** LLM with tool calling
+* **Frontend:** HTML + CSS + JavaScript (static, GitHub Pages)
+* **Backend:** Python + FastAPI (kaushix-api)
+* **Database:** PostgreSQL (later)
+* **Vector Search:** pgvector (later)
+* **AI:** LLM with tool calling (kaushix-api)
 * **Email:** SMTP / transactional email provider
-* **Deployment:** Docker
+* **Deployment:** GitHub Pages (frontend) + Hugging Face Spaces / Docker (backend)
 
 ## Vision
 

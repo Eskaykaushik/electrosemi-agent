@@ -1,0 +1,50 @@
+[
+  {
+    "sku": "STM32F103C8T6",
+    "name": "STM32F103C8T6 - ARM Cortex-M3 MCU",
+    "description": "72 MHz, 64 KB Flash, 20 KB RAM. Popular 'Blue Pill' controller for industrial and hobby projects.",
+    "price": 3.2,
+    "stock": 1240,
+    "category": "Microcontroller"
+  },
+  {
+    "sku": "STM32F407VGT6",
+    "name": "STM32F407VGT6 - ARM Cortex-M4 MCU",
+    "description": "168 MHz, 1 MB Flash, 192 KB RAM, with FPU. Suited for motor control and signal processing.",
+    "price": 7.85,
+    "stock": 620,
+    "category": "Microcontroller"
+  },
+  {
+    "sku": "STM32H743ZIT6",
+    "name": "STM32H743ZIT6 - ARM Cortex-M7 MCU",
+    "description": "400 MHz dual-core M7, 2 MB Flash, 1 MB RAM. High-performance industrial controller.",
+    "price": 14.5,
+    "stock": 310,
+    "category": "Microcontroller"
+  },
+  {
+    "sku": "ESP32-WROOM-32",
+    "name": "ESP32-WROOM-32 - Wi-Fi + Bluetooth SoC",
+    "description": "Dual-core Xtensa LX6, 4 MB Flash, integrated Wi-Fi and Bluetooth. For connected devices.",
+    "price": 2.95,
+    "stock": 2300,
+    "category": "Wireless"
+  },
+  {
+    "sku": "ATMEGA328P-AU",
+    "name": "ATMEGA328P-AU - 8-bit AVR MCU",
+    "description": "20 MHz, 32 KB Flash. Classic Arduino-class controller for simple control tasks.",
+    "price": 1.45,
+    "stock": 5400,
+    "category": "Microcontroller"
+  },
+  {
+    "sku": "RASPBERRY-PI-CM4",
+    "name": "Raspberry Pi Compute Module 4",
+    "description": "Quad-core Cortex-A72, up to 8 GB RAM, optional eMMC. For embedded Linux systems.",
+    "price": 32.0,
+    "stock": 180,
+    "category": "SBC"
+  }
+]
