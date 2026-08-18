@@ -63,6 +63,21 @@
       </form>
     </div>
   </aside>
+
+  <aside id="catalogDrawer" class="drawer catalog-drawer" aria-hidden="true" aria-label="Product catalog">
+    <div class="drawer-head">
+      <h2>Catalog</h2>
+      <button id="catalogClose" class="icon-btn" type="button" aria-label="Close catalog">&times;</button>
+    </div>
+    <div class="catalog-controls">
+      <input id="catalogSearch" type="search" placeholder="Search parts..." class="catalog-search" aria-label="Search catalog" />
+      <div id="catalogTabs" class="catalog-tabs" role="tablist">
+        <button class="catalog-tab active" data-cat="all" role="tab" aria-selected="true">All</button>
+      </div>
+    </div>
+    <div id="catalogGrid" class="catalog-grid"></div>
+    <div id="catalogEmpty" class="catalog-empty" hidden>No products match your search.</div>
+  </aside>
   <div id="overlay" class="overlay" hidden></div>
 
   <div id="srAnnounce" class="sr-only" aria-live="assertive" role="status"></div>

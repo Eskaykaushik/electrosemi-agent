@@ -27,6 +27,12 @@ const overlay = document.getElementById("overlay");
 const scrollIndicator = document.getElementById("scrollIndicator");
 const scrollBtn = document.getElementById("scrollBtn");
 const srAnnounce = document.getElementById("srAnnounce");
+const catalogDrawer = document.getElementById("catalogDrawer");
+const catalogClose = document.getElementById("catalogClose");
+const catalogGrid = document.getElementById("catalogGrid");
+const catalogEmpty = document.getElementById("catalogEmpty");
+const catalogSearch = document.getElementById("catalogSearch");
+const catalogTabs = document.getElementById("catalogTabs");
 
 let products = [];
 const cart = new Map();
@@ -37,6 +43,8 @@ let isUserNearBottom = true;
 let chatStarted = false;
 let lastMsgRole = null;
 let typingAbort = null;
+let catalogActiveCategory = "all";
+let catalogSearchQuery = "";
 
 // ---------- markdown ----------
 function renderMarkdown(text) {
@@ -282,11 +290,140 @@ function removeWelcome() {
   chatStarted = true;
 }
 
+// ---------- catalog drawer ----------
+function openCatalog(skusToHighlight) {
+  catalogDrawer.classList.add("open");
+  catalogDrawer.setAttribute("aria-hidden", "false");
+  overlay.hidden = false;
+  catalogClose.focus();
+  document.addEventListener("keydown", trapCatalogFocus);
+  renderCatalogGrid();
+  if (skusToHighlight && skusToHighlight.length) {
+    setTimeout(function () {
+      skusToHighlight.forEach(function (sku) {
+        var card = catalogGrid.querySelector('[data-sku="' + sku + '"]');
+        if (card) {
+          card.classList.add("highlight");
+          card.scrollIntoView({ behavior: "smooth", block: "center" });
+          setTimeout(function () { card.classList.remove("highlight"); }, 2000);
+        }
+      });
+    }, 100);
+  }
+  announce("Catalog opened");
+}
+
+function closeCatalog() {
+  catalogDrawer.classList.remove("open");
+  catalogDrawer.setAttribute("aria-hidden", "true");
+  overlay.hidden = true;
+  document.removeEventListener("keydown", trapCatalogFocus);
+  announce("Catalog closed");
+}
+
+function trapCatalogFocus(e) {
+  if (e.key === "Escape") { closeCatalog(); return; }
+  if (e.key !== "Tab") return;
+  var focusable = catalogDrawer.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+  if (!focusable.length) return;
+  var first = focusable[0];
+  var last = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+}
+
+function getCatalogFiltered() {
+  return products.filter(function (p) {
+    var catMatch = catalogActiveCategory === "all" || getCategoryColor(p.category).toLowerCase() === catalogActiveCategory.toLowerCase();
+    if (!catMatch) return false;
+    if (!catalogSearchQuery) return true;
+    var q = catalogSearchQuery.toLowerCase();
+    return [p.name, p.description, p.category, p.sku].join(" ").toLowerCase().indexOf(q) !== -1;
+  });
+}
+
+function renderCatalogGrid() {
+  catalogGrid.innerHTML = "";
+  var list = getCatalogFiltered();
+  if (!list.length) {
+    catalogEmpty.hidden = false;
+    catalogGrid.style.display = "none";
+    return;
+  }
+  catalogEmpty.hidden = true;
+  catalogGrid.style.display = "";
+  list.forEach(function (p) {
+    var catColor = getCategoryColor(p.category);
+    var stockCls = getStockClass(p.stock);
+    var card = document.createElement("div");
+    card.className = "catalog-card";
+    card.setAttribute("data-sku", p.sku);
+    card.innerHTML =
+      '<div class="card-top">' +
+        '<span class="name">' + p.name + '</span>' +
+        '<span class="cat" data-cat="' + catColor + '">' + p.category + '</span>' +
+      '</div>' +
+      '<div class="desc">' + p.description + '</div>' +
+      '<div class="meta">' +
+        '<span class="price">$' + p.price.toFixed(2) + '</span>' +
+        '<span class="stock ' + stockCls + '">' + getStockLabel(p.stock) + '</span>' +
+      '</div>';
+    var add = document.createElement("button");
+    add.className = "btn add";
+    var inCart = cart.get(p.sku);
+    if (inCart && inCart.qty > 0) {
+      add.textContent = "In cart (\u00B7 " + inCart.qty + ")";
+      add.classList.add("in-cart");
+    } else {
+      add.textContent = "Add to cart";
+    }
+    add.setAttribute("aria-label", "Add " + p.name + " to cart");
+    add.addEventListener("click", function () { addToCart(p); renderCatalogGrid(); });
+    cardButtons.set(p.sku, add);
+    card.appendChild(add);
+    catalogGrid.appendChild(card);
+  });
+  announce(list.length + " products shown in catalog");
+}
+
+function initCatalogTabs() {
+  var cats = ["all"];
+  products.forEach(function (p) {
+    var c = getCategoryColor(p.category);
+    if (cats.indexOf(c) === -1) cats.push(c);
+  });
+  catalogTabs.innerHTML = "";
+  cats.forEach(function (c) {
+    var btn = document.createElement("button");
+    btn.className = "catalog-tab" + (c === catalogActiveCategory ? " active" : "");
+    btn.setAttribute("role", "tab");
+    btn.setAttribute("aria-selected", c === catalogActiveCategory ? "true" : "false");
+    btn.setAttribute("data-cat", c);
+    btn.textContent = c === "all" ? "All" : c;
+    btn.addEventListener("click", function () {
+      catalogActiveCategory = c;
+      catalogTabs.querySelectorAll(".catalog-tab").forEach(function (t) {
+        t.classList.toggle("active", t.getAttribute("data-cat") === c);
+        t.setAttribute("aria-selected", t.getAttribute("data-cat") === c ? "true" : "false");
+      });
+      renderCatalogGrid();
+    });
+    catalogTabs.appendChild(btn);
+  });
+}
+
+catalogSearch.addEventListener("input", function () {
+  catalogSearchQuery = catalogSearch.value.trim();
+  renderCatalogGrid();
+});
+
+catalogClose.addEventListener("click", closeCatalog);
+
 // ---------- skeleton loading ----------
 function showSkeletons(count) {
-  var wrap = document.createElement("div");
-  wrap.className = "skeleton-grid";
-  wrap.id = "skeletonLoader";
   for (var i = 0; i < (count || 4); i++) {
     var card = document.createElement("div");
     card.className = "skeleton-card";
@@ -295,65 +432,14 @@ function showSkeletons(count) {
       '<div class="skeleton-line w80"></div>' +
       '<div class="skeleton-line w60"></div>' +
       '<div class="skeleton-line btn"></div>';
-    wrap.appendChild(card);
+    catalogGrid.appendChild(card);
   }
-  var container = document.createElement("div");
-  container.appendChild(wrap);
-  addMessage("ai", container);
+  catalogEmpty.hidden = true;
+  catalogGrid.style.display = "";
 }
 
 function removeSkeletons() {
-  var el = document.getElementById("skeletonLoader");
-  if (el) el.closest(".msg").remove();
-}
-
-// ---------- product cards ----------
-function productCard(p) {
-  var catColor = getCategoryColor(p.category);
-  var stockCls = getStockClass(p.stock);
-  var card = document.createElement("div");
-  card.className = "card";
-  card.setAttribute("data-cat", catColor);
-  card.innerHTML =
-    '<div class="card-top">' +
-      '<span class="sku">' + p.sku + '</span>' +
-      '<span class="cat" data-cat="' + catColor + '">' + p.category + '</span>' +
-    '</div>' +
-    '<div class="name">' + p.name + '</div>' +
-    '<div class="desc">' + p.description + '</div>' +
-    '<div class="card-bottom">' +
-      '<div class="meta">' +
-        '<span class="price">$' + p.price.toFixed(2) + '</span>' +
-        '<span class="stock ' + stockCls + '">' + getStockLabel(p.stock) + '</span>' +
-      '</div>' +
-    '</div>';
-  var add = document.createElement("button");
-  add.className = "btn add";
-  add.textContent = "Add to cart";
-  add.setAttribute("aria-label", "Add " + p.name + " to cart");
-  add.addEventListener("click", function () { addToCart(p); });
-  cardButtons.set(p.sku, add);
-  card.appendChild(add);
-  return card;
-}
-
-function renderProducts(list, intro, followUps) {
-  var wrap = document.createElement("div");
-  var introEl = document.createElement("div");
-  introEl.className = "products-intro";
-  introEl.textContent = intro || "Here are some products from our catalog:";
-  wrap.appendChild(introEl);
-  var grid = document.createElement("div");
-  grid.className = "products";
-  list.forEach(function (p) { grid.appendChild(productCard(p)); });
-  wrap.appendChild(grid);
-
-  if (followUps && followUps.length) {
-    wrap.appendChild(renderInlineChips(followUps));
-  }
-
-  addMessage("ai", wrap);
-  announce(list.length + " products shown");
+  catalogGrid.querySelectorAll(".skeleton-card").forEach(function (el) { el.remove(); });
 }
 
 // ---------- fallback mock ----------
@@ -661,11 +747,8 @@ async function send() {
 
   var matches = filterProducts(text);
   if (matches.length && /(need|want|looking|find|show|suggest|stm32|controller|wifi|part|buy)/.test(text.toLowerCase())) {
-    var followUps = [];
-    if (matches.length > 2) followUps.push("Show more options");
-    followUps.push("Compare prices");
-    followUps.push("Filter by category");
-    renderProducts(matches, "Based on your message, here are some matching parts:", followUps);
+    var skus = matches.map(function (p) { return p.sku; });
+    setTimeout(function () { openCatalog(skus); }, 600);
   }
 }
 
@@ -683,14 +766,19 @@ browseBtn.addEventListener("click", async function () {
   browseBtn.textContent = "Loading\u2026";
   removeWelcome();
   showSkeletons(4);
+  openCatalog();
   try {
     await loadProducts();
     removeSkeletons();
-    renderProducts(products, "Our current catalog:", ["Search by name", "Filter by category", "Show microcontrollers only"]);
+    initCatalogTabs();
+    renderCatalogGrid();
   } catch (err) {
     console.error("Failed to load catalog:", err);
     removeSkeletons();
-    renderProducts([], "Failed to load catalog. Please try again later.");
+    catalogGrid.innerHTML = "";
+    catalogEmpty.hidden = false;
+    catalogEmpty.textContent = "Failed to load catalog. Please try again later.";
+    catalogGrid.style.display = "none";
   } finally {
     browseBtn.disabled = false;
     browseBtn.textContent = "Catalog";
@@ -699,7 +787,10 @@ browseBtn.addEventListener("click", async function () {
 
 cartBtn.addEventListener("click", openCart);
 cartClose.addEventListener("click", closeCart);
-overlay.addEventListener("click", closeCart);
+overlay.addEventListener("click", function () {
+  if (!cartDrawer.classList.contains("open")) closeCatalog();
+  else closeCart();
+});
 
 cartForm.addEventListener("submit", function (e) {
   e.preventDefault();
