@@ -921,7 +921,7 @@ html, body {
   .welcome p { font-size: 12px; }
   .chip { min-height: 38px; padding: 8px 16px; font-size: 13px; }
   .welcome-chips { gap: 6px; }
-  .composer { padding: 8px 10px; padding-bottom: calc(8px + var(--safe-bottom)); }
+  .composer { position: static; padding: 8px 10px; padding-bottom: calc(8px + var(--safe-bottom)); }
   .composer textarea { font-size: 16px; }
 }
 
