@@ -182,6 +182,12 @@ function renderInlineChips(chips) {
   return wrap;
 }
 
+// ---------- post-reply suggestions ----------
+function addSuggestions(msgEl) {
+  var suggestions = renderInlineChips(["Browse catalog", "Add to cart", "Get a quote"]);
+  msgEl.appendChild(suggestions);
+}
+
 // ---------- welcome screen ----------
 function renderWelcome() {
   var welcome = document.createElement("div");
@@ -314,7 +320,7 @@ async function chatWithBackend(message) {
   });
   if (!res.ok) throw new Error("Backend returned " + res.status);
   var data = await res.json();
-  return data.response || "";
+  return { text: data.response || "", toolCalls: data.tool_calls || [] };
 }
 
 // ---------- products ----------
@@ -503,6 +509,37 @@ async function submitCart(customer) {
   }
 }
 
+// ---------- tool call handling ----------
+function handleToolCalls(toolCalls) {
+  toolCalls.forEach(function (tc) {
+    if (tc.name === "add_to_cart") {
+      var items = (tc.arguments && tc.arguments.items) || [];
+      items.forEach(function (item) {
+        var product = products.find(function (p) { return p.sku === item.sku; });
+        if (!product) {
+          console.warn("Unknown SKU from agent:", item.sku);
+          return;
+        }
+        var qty = parseInt(item.quantity, 10) || 1;
+        var existing = cart.get(product.sku) || { sku: product.sku, name: product.name, price: product.price, qty: 0 };
+        existing.qty += qty;
+        cart.set(product.sku, existing);
+        announce(product.name + " added to cart. Quantity: " + existing.qty);
+      });
+      updateCardButtons();
+      updateCart();
+      if (items.length) {
+        flashStatus("Added " + items.length + " item(s) to cart", "ok");
+      }
+    }
+    if (tc.name === "send_order_email") {
+      cart.clear();
+      updateCardButtons();
+      updateCart();
+    }
+  });
+}
+
 // ---------- events ----------
 async function send() {
   var text = inputEl.value.trim();
@@ -523,14 +560,20 @@ async function send() {
   inputEl.disabled = true;
 
   try {
-    var reply = await chatWithBackend(text);
+    var result = await chatWithBackend(text);
+    var reply = result.text;
     chatHistory.push({ role: "assistant", content: reply });
     indicator.replaceChild(textNode(reply), indicator.firstChild);
+    addSuggestions(indicator);
+    if (result.toolCalls.length) {
+      handleToolCalls(result.toolCalls);
+    }
   } catch (err) {
     console.warn("Backend unreachable, using mock reply:", err);
     var fallback = mockReply(text);
     chatHistory.push({ role: "assistant", content: fallback });
     indicator.replaceChild(textNode(fallback), indicator.firstChild);
+    addSuggestions(indicator);
   } finally {
     sendBtn.disabled = false;
     inputEl.disabled = false;
