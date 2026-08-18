@@ -1,19 +1,17 @@
 // ElectroSemi Agent — vanilla frontend
 // Products are served from a local catalog (products.json) for now.
-// On submit, the cart is POSTed to the kaushix-api backend contract:
-//   POST {API_BASE}/api/electrosemi/orders
-// The backend (you build it) emails the sales team. See README for the contract.
+// Chat messages are sent to the kaushix-api backend which routes them
+// through the ElectroSemi agent. The cart submit also hits the backend
+// to email the sales team. See README for the contract.
 
-// Set your deployed kaushix-api base URL here, or override at runtime with ?api=https://...
 const API_BASE = "https://kaushix-api-service.onrender.com";
 
 const params = new URLSearchParams(location.search);
 const apiBase = params.get("api") || API_BASE;
 
-// Pre-warm the Render backend (free tier cold starts)
 fetch(apiBase, { method: "GET" }).catch(() => {});
 
-const productsEl = document.getElementById("messages");
+const messagesEl = document.getElementById("messages");
 const inputEl = document.getElementById("input");
 const sendBtn = document.getElementById("sendBtn");
 const browseBtn = document.getElementById("browseBtn");
@@ -28,15 +26,16 @@ const cartStatusEl = document.getElementById("cartStatus");
 const overlay = document.getElementById("overlay");
 
 let products = [];
-const cart = new Map(); // sku -> { sku, name, price, qty }
+const cart = new Map();
+const chatHistory = [];
 
 // ---------- rendering ----------
 function addMessage(role, contentNode) {
   const el = document.createElement("div");
   el.className = "msg " + role;
   el.appendChild(contentNode);
-  productsEl.appendChild(el);
-  productsEl.scrollTop = productsEl.scrollHeight;
+  messagesEl.appendChild(el);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
   return el;
 }
 
@@ -84,7 +83,7 @@ function renderProducts(list, intro) {
   addMessage("ai", wrap);
 }
 
-// ---------- mock AI ----------
+// ---------- fallback mock (used when backend is unreachable) ----------
 function mockReply(text) {
   const t = text.toLowerCase();
   if (/(stm32|microcontroller|mcu|controller|industrial)/.test(t)) {
@@ -97,6 +96,18 @@ function mockReply(text) {
     return "Add the parts you need to your cart and submit — our sales team will prepare a formal quote.";
   }
   return "I'm your sourcing assistant. Tell me about your project (e.g. 'I need 500 STM32 controllers') and I'll suggest parts you can add to a cart.";
+}
+
+// ---------- chat with backend ----------
+async function chatWithBackend(message) {
+  const res = await fetch(apiBase + "/api/electrosemi", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, history: chatHistory }),
+  });
+  if (!res.ok) throw new Error("Backend returned " + res.status);
+  const data = await res.json();
+  return data.response || "";
 }
 
 // ---------- products ----------
@@ -149,7 +160,7 @@ function updateCart() {
       const qty = document.createElement("div");
       qty.className = "qty";
       const minus = document.createElement("button");
-      minus.textContent = "−";
+      minus.textContent = "\u2212";
       minus.addEventListener("click", () => changeQty(i.sku, -1));
       const n = document.createElement("span");
       n.textContent = i.qty;
@@ -182,7 +193,13 @@ async function submitCart(customer) {
   const message =
     "A customer submitted a new order. Call the send_order_email tool with " +
     "these exact details:\n" + JSON.stringify(order);
-  flashStatus("Sending to sales team…");
+
+  const submitBtn = cartForm.querySelector('button[type="submit"]');
+  const origText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Sending\u2026";
+  flashStatus("Sending to sales team\u2026");
+
   try {
     const res = await fetch(apiBase + "/api/electrosemi", {
       method: "POST",
@@ -196,9 +213,11 @@ async function submitCart(customer) {
     updateCart();
     setTimeout(closeCart, 1500);
   } catch (err) {
-    // Backend not reachable yet — keep the order visible for the user.
     console.error("Order submit failed:", order, err);
-    flashStatus("Backend not reachable yet — your request was recorded locally. (" + err.message + ")", "err");
+    flashStatus("Backend not reachable yet \u2014 your request was recorded locally. (" + err.message + ")", "err");
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = origText;
   }
 }
 
@@ -209,10 +228,27 @@ async function send() {
   inputEl.value = "";
   addMessage("customer", textNode(text));
 
-  const indicator = addMessage("ai", typingNode());
-  await new Promise((r) => setTimeout(r, 500 + Math.random() * 700));
+  chatHistory.push({ role: "user", content: text });
 
-  indicator.replaceChild(textNode(mockReply(text)), indicator.firstChild);
+  const indicator = addMessage("ai", typingNode());
+
+  sendBtn.disabled = true;
+  inputEl.disabled = true;
+
+  try {
+    const reply = await chatWithBackend(text);
+    chatHistory.push({ role: "assistant", content: reply });
+    indicator.replaceChild(textNode(reply), indicator.firstChild);
+  } catch (err) {
+    console.warn("Backend unreachable, using mock reply:", err);
+    const fallback = mockReply(text);
+    chatHistory.push({ role: "assistant", content: fallback });
+    indicator.replaceChild(textNode(fallback), indicator.firstChild);
+  } finally {
+    sendBtn.disabled = false;
+    inputEl.disabled = false;
+    inputEl.focus();
+  }
 
   const matches = filterProducts(text);
   if (matches.length && /(need|want|looking|find|show|suggest|stm32|controller|wifi|part|buy)/.test(text.toLowerCase())) {
@@ -230,8 +266,18 @@ inputEl.addEventListener("input", () => {
 });
 
 browseBtn.addEventListener("click", async () => {
-  await loadProducts();
-  renderProducts(products, "Our current catalog:");
+  browseBtn.disabled = true;
+  browseBtn.textContent = "Loading\u2026";
+  try {
+    await loadProducts();
+    renderProducts(products, "Our current catalog:");
+  } catch (err) {
+    console.error("Failed to load catalog:", err);
+    renderProducts([], "Failed to load catalog. Please try again later.");
+  } finally {
+    browseBtn.disabled = false;
+    browseBtn.textContent = "Browse catalog";
+  }
 });
 
 cartBtn.addEventListener("click", openCart);
@@ -248,6 +294,6 @@ cartForm.addEventListener("submit", (e) => {
 // ---------- init ----------
 (async () => {
   await loadProducts();
-  addMessage("ai", textNode("Hi! I'm the ElectroSemi sourcing assistant. Tell me what you're building, or tap “Browse catalog” to see our parts."));
+  addMessage("ai", textNode("Hi! I'm the ElectroSemi sourcing assistant. Tell me what you're building, or tap \u201cBrowse catalog\u201d to see our parts."));
   updateCart();
 })();
