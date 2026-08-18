@@ -135,30 +135,32 @@ The site goes live at `https://eskaykaushik.github.io/electrosemi-agent/`.
 
 ## Backend Contract (kaushix-api)
 
-When the customer submits the cart, the frontend `POST`s to:
+When the customer submits the cart, the frontend `POST`s the order to the
+**ElectroSemi agent** endpoint:
 
 ```text
-POST {KAPSHIX_API_BASE}/api/electrosemi/orders
+POST https://kaushix-api-service.onrender.com/api/electrosemi
 Content-Type: application/json
 ```
 
 ```json
 {
-  "customer": { "name": "Jane Doe", "email": "jane@acme.com", "company": "Acme" },
-  "items": [
-    { "sku": "STM32F407VGT6", "name": "STM32F407VGT6 - ARM Cortex-M4 MCU", "quantity": 500, "unitPrice": 7.85 }
-  ],
-  "notes": "Industrial project, need by Q3."
+  "message": "A customer submitted a new order. Call the send_order_email tool with these exact details:\n{ \"customer\": { \"name\": \"Jane Doe\", \"email\": \"jane@acme.com\", \"company\": \"Acme\" }, \"items\": [ { \"sku\": \"STM32F407VGT6\", \"name\": \"STM32F407VGT6 - ARM Cortex-M4 MCU\", \"quantity\": 500, \"unitPrice\": 7.85 } ], \"notes\": \"Industrial project\" }",
+  "history": []
 }
 ```
 
-Expected response:
+The `electrosemi` agent calls its **`send_order_email`** tool, which composes
+the order and emails it to `SALES_TEAM_EMAIL` via Resend. The endpoint returns:
 
 ```json
-{ "status": "received", "orderId": "..." }
+{ "response": "Your order was sent to the sales team — someone will follow up shortly." }
 ```
 
-The backend is responsible for validating the items and emailing the sales team. CORS is already enabled on kaushix-api (`allow_origins=["*"]`), so the Pages site can call it directly. The exact path/shape is adjustable since the backend lives in a separate repo.
+The frontend shows that `response` text as the confirmation. `API_BASE` in
+`app.js` points at the Render deployment; override locally with `?api=...`.
+CORS is enabled on kaushix-api (`allow_origins=["*"]`), so the Pages site can
+call it directly.
 
 ## MVP
 

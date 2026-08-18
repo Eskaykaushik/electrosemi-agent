@@ -5,11 +5,13 @@
 // The backend (you build it) emails the sales team. See README for the contract.
 
 // Set your deployed kaushix-api base URL here, or override at runtime with ?api=https://...
-const API_BASE = "https://kaushix-api.hf.space";
-const ORDERS_PATH = "/api/electrosemi/orders";
+const API_BASE = "https://kaushix-api-service.onrender.com";
 
 const params = new URLSearchParams(location.search);
 const apiBase = params.get("api") || API_BASE;
+
+// Pre-warm the Render backend (free tier cold starts)
+fetch(apiBase, { method: "GET" }).catch(() => {});
 
 const productsEl = document.getElementById("messages");
 const inputEl = document.getElementById("input");
@@ -176,22 +178,26 @@ async function submitCart(customer) {
   const items = [...cart.values()].map((i) => ({
     sku: i.sku, name: i.name, quantity: i.qty, unitPrice: i.price,
   }));
-  const payload = { customer, items, notes: customer.notes || "" };
+  const order = { customer, items, notes: customer.notes || "" };
+  const message =
+    "A customer submitted a new order. Call the send_order_email tool with " +
+    "these exact details:\n" + JSON.stringify(order);
   flashStatus("Sending to sales team…");
   try {
-    const res = await fetch(apiBase + ORDERS_PATH, {
+    const res = await fetch(apiBase + "/api/electrosemi", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ message, history: [] }),
     });
     if (!res.ok) throw new Error("Backend returned " + res.status);
-    flashStatus("Sent! Our sales team will follow up shortly.", "ok");
+    const data = await res.json();
+    flashStatus(data.response || "Sent! Our sales team will follow up shortly.", "ok");
     cart.clear();
     updateCart();
     setTimeout(closeCart, 1500);
   } catch (err) {
-    // Backend not ready yet — keep the order visible for the user.
-    console.error("Order submit failed:", payload, err);
+    // Backend not reachable yet — keep the order visible for the user.
+    console.error("Order submit failed:", order, err);
     flashStatus("Backend not reachable yet — your request was recorded locally. (" + err.message + ")", "err");
   }
 }
