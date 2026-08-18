@@ -844,6 +844,7 @@ html, body {
   justify-content: space-between;
   align-items: center;
   margin-top: 2px;
+  white-space: nowrap;
 }
 .catalog-card .price {
   color: var(--text);
