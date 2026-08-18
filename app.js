@@ -28,6 +28,7 @@ const overlay = document.getElementById("overlay");
 let products = [];
 const cart = new Map();
 const chatHistory = [];
+const cardButtons = new Map();
 
 // ---------- rendering ----------
 function addMessage(role, contentNode) {
@@ -55,18 +56,24 @@ function typingNode() {
 function productCard(p) {
   const card = document.createElement("div");
   card.className = "card";
-  card.innerHTML = `
-    <div class="cat">${p.category}</div>
-    <div class="name">${p.name}</div>
-    <div class="desc">${p.description}</div>
-    <div class="meta">
-      <span class="price">$${p.price.toFixed(2)}</span>
-      <span class="stock">${p.stock} in stock</span>
-    </div>`;
-  const add = document.createElement("button");
-  add.className = "btn primary add";
+  card.innerHTML =
+    '<div class="card-top">' +
+      '<span class="sku">' + p.sku + '</span>' +
+      '<span class="cat">' + p.category + '</span>' +
+    '</div>' +
+    '<div class="name">' + p.name + '</div>' +
+    '<div class="desc">' + p.description + '</div>' +
+    '<div class="card-bottom">' +
+      '<div class="meta">' +
+        '<span class="price">$' + p.price.toFixed(2) + '</span>' +
+        '<span class="stock">' + p.stock + ' in stock</span>' +
+      '</div>' +
+    '</div>';
+  var add = document.createElement("button");
+  add.className = "btn add";
   add.textContent = "Add to cart";
-  add.addEventListener("click", () => addToCart(p));
+  add.addEventListener("click", function () { addToCart(p); });
+  cardButtons.set(p.sku, add);
   card.appendChild(add);
   return card;
 }
@@ -74,16 +81,17 @@ function productCard(p) {
 function renderProducts(list, intro) {
   const wrap = document.createElement("div");
   const introEl = document.createElement("div");
+  introEl.className = "products-intro";
   introEl.textContent = intro || "Here are some products from our catalog:";
   wrap.appendChild(introEl);
   const grid = document.createElement("div");
   grid.className = "products";
-  list.forEach((p) => grid.appendChild(productCard(p)));
+  list.forEach(function (p) { grid.appendChild(productCard(p)); });
   wrap.appendChild(grid);
   addMessage("ai", wrap);
 }
 
-// ---------- fallback mock (used when backend is unreachable) ----------
+// ---------- fallback mock ----------
 function mockReply(text) {
   const t = text.toLowerCase();
   if (/(stm32|microcontroller|mcu|controller|industrial)/.test(t)) {
@@ -93,7 +101,7 @@ function mockReply(text) {
     return "For wireless needs we carry Wi-Fi/Bluetooth SoCs like the ESP32. Shall I list them?";
   }
   if (/(price|quote|cost|how much)/.test(t)) {
-    return "Add the parts you need to your cart and submit — our sales team will prepare a formal quote.";
+    return "Add the parts you need to your cart and submit \u2014 our sales team will prepare a formal quote.";
   }
   return "I'm your sourcing assistant. Tell me about your project (e.g. 'I need 500 STM32 controllers') and I'll suggest parts you can add to a cart.";
 }
@@ -103,7 +111,7 @@ async function chatWithBackend(message) {
   const res = await fetch(apiBase + "/api/electrosemi", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, history: chatHistory }),
+    body: JSON.stringify({ message: message, history: chatHistory }),
   });
   if (!res.ok) throw new Error("Backend returned " + res.status);
   const data = await res.json();
@@ -120,9 +128,9 @@ async function loadProducts() {
 
 function filterProducts(text) {
   const q = text.toLowerCase();
-  return products.filter((p) =>
-    [p.name, p.description, p.category, p.sku].join(" ").toLowerCase().includes(q)
-  );
+  return products.filter(function (p) {
+    return [p.name, p.description, p.category, p.sku].join(" ").toLowerCase().includes(q);
+  });
 }
 
 // ---------- cart ----------
@@ -130,8 +138,9 @@ function addToCart(p) {
   const item = cart.get(p.sku) || { sku: p.sku, name: p.name, price: p.price, qty: 0 };
   item.qty += 1;
   cart.set(p.sku, item);
+  updateCardButtons();
   updateCart();
-  flashStatus(`Added ${p.sku} to cart`, "ok");
+  flashStatus("Added " + p.sku + " to cart", "ok");
 }
 
 function changeQty(sku, delta) {
@@ -139,40 +148,61 @@ function changeQty(sku, delta) {
   if (!item) return;
   item.qty += delta;
   if (item.qty <= 0) cart.delete(sku);
+  updateCardButtons();
   updateCart();
 }
 
+function updateCardButtons() {
+  for (var entry of cardButtons) {
+    var sku = entry[0], btn = entry[1];
+    var item = cart.get(sku);
+    if (item && item.qty > 0) {
+      btn.textContent = "In cart (\u00B7 " + item.qty + ")";
+      btn.classList.add("in-cart");
+    } else {
+      btn.textContent = "Add to cart";
+      btn.classList.remove("in-cart");
+    }
+  }
+}
+
 function updateCart() {
-  const total = [...cart.values()].reduce((s, i) => s + i.qty, 0);
-  cartCountEl.textContent = total;
+  var totalQty = 0;
+  cart.forEach(function (i) { totalQty += i.qty; });
+  cartCountEl.textContent = totalQty;
   cartItemsEl.innerHTML = "";
   if (cart.size === 0) {
-    const e = document.createElement("div");
+    var e = document.createElement("div");
     e.className = "cart-empty";
     e.textContent = "Your cart is empty. Browse the catalog to add parts.";
     cartItemsEl.appendChild(e);
   } else {
-    [...cart.values()].forEach((i) => {
-      const row = document.createElement("div");
+    cart.forEach(function (i) {
+      var row = document.createElement("div");
       row.className = "cart-row";
-      row.innerHTML = `
-        <div class="info">${i.name}<small>$${i.price.toFixed(2)} × ${i.qty}</small></div>`;
-      const qty = document.createElement("div");
+      var info = document.createElement("div");
+      info.className = "info";
+      info.textContent = i.name;
+      var small = document.createElement("small");
+      small.textContent = "$" + i.price.toFixed(2) + " \u00D7 " + i.qty;
+      info.appendChild(small);
+      var qty = document.createElement("div");
       qty.className = "qty";
-      const minus = document.createElement("button");
+      var minus = document.createElement("button");
       minus.textContent = "\u2212";
-      minus.addEventListener("click", () => changeQty(i.sku, -1));
-      const n = document.createElement("span");
+      minus.addEventListener("click", (function (sku) { return function () { changeQty(sku, -1); }; })(i.sku));
+      var n = document.createElement("span");
       n.textContent = i.qty;
-      const plus = document.createElement("button");
+      var plus = document.createElement("button");
       plus.textContent = "+";
-      plus.addEventListener("click", () => changeQty(i.sku, 1));
+      plus.addEventListener("click", (function (sku) { return function () { changeQty(sku, 1); }; })(i.sku));
       qty.append(minus, n, plus);
-      row.appendChild(qty);
+      row.append(info, qty);
       cartItemsEl.appendChild(row);
     });
   }
-  const totalPrice = [...cart.values()].reduce((s, i) => s + i.qty * i.price, 0);
+  var totalPrice = 0;
+  cart.forEach(function (i) { totalPrice += i.qty * i.price; });
   cartTotalEl.textContent = "$" + totalPrice.toFixed(2);
 }
 
@@ -186,30 +216,32 @@ function flashStatus(msg, kind) {
 
 // ---------- submit ----------
 async function submitCart(customer) {
-  const items = [...cart.values()].map((i) => ({
-    sku: i.sku, name: i.name, quantity: i.qty, unitPrice: i.price,
-  }));
-  const order = { customer, items, notes: customer.notes || "" };
-  const message =
+  var items = [];
+  cart.forEach(function (i) {
+    items.push({ sku: i.sku, name: i.name, quantity: i.qty, unitPrice: i.price });
+  });
+  var order = { customer: customer, items: items, notes: customer.notes || "" };
+  var message =
     "A customer submitted a new order. Call the send_order_email tool with " +
     "these exact details:\n" + JSON.stringify(order);
 
-  const submitBtn = cartForm.querySelector('button[type="submit"]');
-  const origText = submitBtn.textContent;
+  var submitBtn = cartForm.querySelector('button[type="submit"]');
+  var origText = submitBtn.textContent;
   submitBtn.disabled = true;
   submitBtn.textContent = "Sending\u2026";
   flashStatus("Sending to sales team\u2026");
 
   try {
-    const res = await fetch(apiBase + "/api/electrosemi", {
+    var res = await fetch(apiBase + "/api/electrosemi", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, history: [] }),
+      body: JSON.stringify({ message: message, history: [] }),
     });
     if (!res.ok) throw new Error("Backend returned " + res.status);
-    const data = await res.json();
+    var data = await res.json();
     flashStatus(data.response || "Sent! Our sales team will follow up shortly.", "ok");
     cart.clear();
+    updateCardButtons();
     updateCart();
     setTimeout(closeCart, 1500);
   } catch (err) {
@@ -223,25 +255,25 @@ async function submitCart(customer) {
 
 // ---------- events ----------
 async function send() {
-  const text = inputEl.value.trim();
+  var text = inputEl.value.trim();
   if (!text) return;
   inputEl.value = "";
   addMessage("customer", textNode(text));
 
   chatHistory.push({ role: "user", content: text });
 
-  const indicator = addMessage("ai", typingNode());
+  var indicator = addMessage("ai", typingNode());
 
   sendBtn.disabled = true;
   inputEl.disabled = true;
 
   try {
-    const reply = await chatWithBackend(text);
+    var reply = await chatWithBackend(text);
     chatHistory.push({ role: "assistant", content: reply });
     indicator.replaceChild(textNode(reply), indicator.firstChild);
   } catch (err) {
     console.warn("Backend unreachable, using mock reply:", err);
-    const fallback = mockReply(text);
+    var fallback = mockReply(text);
     chatHistory.push({ role: "assistant", content: fallback });
     indicator.replaceChild(textNode(fallback), indicator.firstChild);
   } finally {
@@ -250,22 +282,22 @@ async function send() {
     inputEl.focus();
   }
 
-  const matches = filterProducts(text);
+  var matches = filterProducts(text);
   if (matches.length && /(need|want|looking|find|show|suggest|stm32|controller|wifi|part|buy)/.test(text.toLowerCase())) {
     renderProducts(matches, "Based on your message, here are some matching parts:");
   }
 }
 
 sendBtn.addEventListener("click", send);
-inputEl.addEventListener("keydown", (e) => {
+inputEl.addEventListener("keydown", function (e) {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
 });
-inputEl.addEventListener("input", () => {
+inputEl.addEventListener("input", function () {
   inputEl.style.height = "auto";
   inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + "px";
 });
 
-browseBtn.addEventListener("click", async () => {
+browseBtn.addEventListener("click", async function () {
   browseBtn.disabled = true;
   browseBtn.textContent = "Loading\u2026";
   try {
@@ -284,15 +316,16 @@ cartBtn.addEventListener("click", openCart);
 cartClose.addEventListener("click", closeCart);
 overlay.addEventListener("click", closeCart);
 
-cartForm.addEventListener("submit", (e) => {
+cartForm.addEventListener("submit", function (e) {
   e.preventDefault();
   if (cart.size === 0) { flashStatus("Add at least one part before submitting.", "err"); return; }
-  const data = Object.fromEntries(new FormData(cartForm).entries());
+  var data = {};
+  new FormData(cartForm).forEach(function (v, k) { data[k] = v; });
   submitCart(data);
 });
 
 // ---------- init ----------
-(async () => {
+(async function () {
   await loadProducts();
   addMessage("ai", textNode("Hi! I'm the ElectroSemi sourcing assistant. Tell me what you're building, or tap \u201cBrowse catalog\u201d to see our parts."));
   updateCart();

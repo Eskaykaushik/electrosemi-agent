@@ -3,7 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ElectroSemi Agent</title>
+  <meta name="theme-color" content="#0a0a0f" />
+  <title>ElectroSemi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -12,12 +16,12 @@
       <div class="brand">
         <span class="dot"></span>
         <div>
-          <h1>ElectroSemi Agent</h1>
-          <p>Conversational electronics sourcing</p>
+          <h1>ElectroSemi</h1>
+          <p>electronics sourcing</p>
         </div>
       </div>
       <div class="header-actions">
-        <button id="browseBtn" class="btn ghost" type="button">Browse catalog</button>
+        <button id="browseBtn" class="btn ghost" type="button">Catalog</button>
         <button id="cartBtn" class="btn primary" type="button">
           Cart <span id="cartCount" class="badge">0</span>
         </button>
@@ -27,15 +31,15 @@
     <main id="messages" class="messages" aria-live="polite"></main>
 
     <footer class="composer">
-      <textarea id="input" rows="1" placeholder="Ask about a part, e.g. 'I need STM32 controllers for an industrial project'"></textarea>
+      <textarea id="input" rows="1" placeholder="Ask about a part..."></textarea>
       <button id="sendBtn" class="btn primary" type="button">Send</button>
     </footer>
   </div>
 
   <aside id="cartDrawer" class="drawer" aria-hidden="true">
     <div class="drawer-head">
-      <h2>Your cart</h2>
-      <button id="cartClose" class="icon-btn" type="button" aria-label="Close cart">×</button>
+      <h2>Cart</h2>
+      <button id="cartClose" class="icon-btn" type="button" aria-label="Close cart">&times;</button>
     </div>
     <div id="cartItems" class="cart-items"></div>
     <div class="cart-summary">
@@ -45,7 +49,7 @@
         <input name="email" type="email" placeholder="Email" required />
         <input name="company" type="text" placeholder="Company (optional)" />
         <textarea name="notes" rows="2" placeholder="Notes (optional)"></textarea>
-        <button type="submit" class="btn primary block">Submit to sales team</button>
+        <button type="submit" class="btn primary block">Submit order</button>
         <p id="cartStatus" class="cart-status"></p>
       </form>
     </div>
