@@ -49,7 +49,7 @@ html, body {
 
 /* ---------- layout ---------- */
 .app {
-  max-width: 780px;
+  max-width: 900px;
   margin: 0 auto;
   height: 100vh;
   height: 100dvh;
@@ -155,7 +155,7 @@ html, body {
   padding-bottom: 64px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   scroll-behavior: smooth;
   overscroll-behavior: contain;
 }
@@ -174,6 +174,7 @@ html, body {
   color: var(--text);
   border: 1px solid rgba(59, 130, 246, 0.2);
   border-bottom-right-radius: 3px;
+  animation: slideInRight .25s cubic-bezier(.2,.8,.3,1);
 }
 .msg.ai {
   align-self: flex-start;
@@ -181,6 +182,12 @@ html, body {
   color: var(--text);
   border: 1px solid var(--border);
   border-bottom-left-radius: 3px;
+  animation: slideInLeft .25s cubic-bezier(.2,.8,.3,1), newMsgGlow 1s ease .25s;
+}
+.msg.ai.typing-active {
+  border-color: rgba(45, 212, 191, 0.3);
+  box-shadow: 0 0 12px rgba(45, 212, 191, 0.08);
+  animation: typingGlow 1.5s ease-in-out infinite;
 }
 .msg.system {
   align-self: stretch;
@@ -193,9 +200,21 @@ html, body {
 .msg-grouped.msg.customer { border-top-right-radius: 3px; }
 .msg-grouped.msg.ai { border-top-left-radius: 3px; }
 
-@keyframes msgIn {
-  from { opacity: 0; transform: translateY(6px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(12px) scale(0.97); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-12px) scale(0.97); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes typingGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(45, 212, 191, 0.05); }
+  50% { box-shadow: 0 0 16px rgba(45, 212, 191, 0.12); }
+}
+@keyframes newMsgGlow {
+  0% { box-shadow: 0 0 8px rgba(45, 212, 191, 0.15); }
+  100% { box-shadow: none; }
 }
 
 .msg-time {
@@ -267,13 +286,17 @@ html, body {
 .md-content h1 { font-size: 16px; }
 .md-content h2 { font-size: 15px; }
 .md-content h3 { font-size: 14px; }
+.table-wrap {
+  overflow-x: auto;
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
 .md-content table {
   width: 100%;
   border-collapse: collapse;
-  margin: 8px 0;
   font-size: 12px;
-  overflow-x: auto;
-  display: block;
+  table-layout: auto;
 }
 .md-content thead th {
   background: var(--panel-3);
@@ -446,7 +469,7 @@ html, body {
   left: 0;
   right: 0;
   z-index: 5;
-  max-width: 780px;
+  max-width: 900px;
   margin: 0 auto;
 }
 .composer-wrap {
