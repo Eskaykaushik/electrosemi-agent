@@ -381,7 +381,12 @@ function renderCatalogGrid() {
       add.textContent = "Add to cart";
     }
     add.setAttribute("aria-label", "Add " + p.name + " to cart");
-    add.addEventListener("click", function () { addToCart(p); renderCatalogGrid(); });
+    add.addEventListener("click", function () {
+      addToCart(p);
+      renderCatalogGrid();
+      var newBtn = catalogGrid.querySelector('[data-sku="' + p.sku + '"] .btn.add');
+      if (newBtn) { newBtn.classList.add("flash"); }
+    });
     cardButtons.set(p.sku, add);
     card.appendChild(add);
     catalogGrid.appendChild(card);
