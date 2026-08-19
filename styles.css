@@ -766,7 +766,8 @@ html, body {
   margin-top: 6px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 10px;
 }
 .catalog-card .card-action .btn.add {
   margin-top: 0;
@@ -790,6 +791,14 @@ html, body {
   font-family: var(--mono);
   font-size: 13px;
   font-weight: 500;
+}
+.qty-count.qty-glow {
+  animation: qtyGlow .4s ease;
+}
+@keyframes qtyGlow {
+  0%   { color: var(--accent); text-shadow: 0 0 8px var(--accent-glow); transform: scale(1); }
+  50%  { color: var(--accent); text-shadow: 0 0 14px var(--accent-glow); transform: scale(1.2); }
+  100% { color: var(--text); text-shadow: none; transform: scale(1); }
 }
 .catalog-empty {
   padding: 32px 16px;
