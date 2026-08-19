@@ -9,7 +9,12 @@ const API_BASE = "https://kaushix-api-service.onrender.com";
 const params = new URLSearchParams(location.search);
 const apiBase = params.get("api") || API_BASE;
 
-fetch(apiBase, { method: "GET" }).catch(() => {});
+// Wake up Render free-tier dyno + prime backend cache on page load
+fetch(apiBase + "/api/electrosemi", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ message: "What products do you have?", history: [] }),
+}).catch(() => {});
 
 const messagesEl = document.getElementById("messages");
 const inputEl = document.getElementById("input");
