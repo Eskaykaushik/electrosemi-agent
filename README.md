@@ -36,6 +36,9 @@ Customer + Internal Team
 
 * **Real-time AI chat** — messages sent to the kaushix-api ElectroSemi agent via `POST /api/electrosemi`
 * **Conversation history** — full chat history sent with each request for multi-turn context
+* **Local intent handling** — common queries like "check my cart" and "browse catalog" are resolved instantly in the browser without hitting the backend
+* **Contextual suggestion chips** — follow-up suggestions adapt based on conversation state (cart contents, catalog activity, etc.)
+* **Graceful error handling** — empty or failed backend responses show a friendly fallback message instead of blank bubbles
 * **Conversational product discovery**
 * **In-chat product catalog** with selectable suggestion cards
 * **Shopping cart** with quantity control
