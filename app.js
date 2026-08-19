@@ -9,7 +9,12 @@ const API_BASE = "https://kaushix-api-service.onrender.com";
 const params = new URLSearchParams(location.search);
 const apiBase = params.get("api") || API_BASE;
 
-fetch(apiBase, { method: "GET" }).catch(() => {});
+// Wake up Render free-tier dyno + prime backend cache on page load
+fetch(apiBase + "/api/electrosemi", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ message: "What products do you have?", history: [] }),
+}).catch(() => {});
 
 const messagesEl = document.getElementById("messages");
 const inputEl = document.getElementById("input");
@@ -381,7 +386,12 @@ function renderCatalogGrid() {
       add.textContent = "Add to cart";
     }
     add.setAttribute("aria-label", "Add " + p.name + " to cart");
-    add.addEventListener("click", function () { addToCart(p); renderCatalogGrid(); });
+    add.addEventListener("click", function () {
+      addToCart(p);
+      renderCatalogGrid();
+      var newBtn = catalogGrid.querySelector('[data-sku="' + p.sku + '"] .btn.add');
+      if (newBtn) { newBtn.classList.add("flash"); }
+    });
     cardButtons.set(p.sku, add);
     card.appendChild(add);
     catalogGrid.appendChild(card);
