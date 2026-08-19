@@ -293,7 +293,7 @@ html, body {
   border-radius: 6px;
 }
 .md-content table {
-  min-width: 100%;
+  width: auto;
   border-collapse: collapse;
   font-size: 12px;
 }
@@ -308,6 +308,7 @@ html, body {
   font-size: 10px;
   border-bottom: 1px solid var(--border);
   font-family: var(--mono);
+  white-space: nowrap;
 }
 .md-content tbody td {
   padding: 6px 10px;
