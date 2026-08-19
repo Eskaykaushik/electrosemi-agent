@@ -53,9 +53,15 @@ let catalogSearchQuery = "";
 const intentCache = new Map();
 
 // ---------- markdown ----------
+var markedRenderer = new marked.Renderer();
+var origTable = markedRenderer.table.bind(markedRenderer);
+markedRenderer.table = function (header, body) {
+  return '<div class="table-wrap"><table>' + origTable(header, body) + '</table></div>';
+};
+
 function renderMarkdown(text) {
   if (typeof marked !== "undefined") {
-    return marked.parse(text);
+    return marked.parse(text, { renderer: markedRenderer });
   }
   return text
     .replace(/&/g, "&amp;")
@@ -730,7 +736,17 @@ function handleToolCalls(toolCalls) {
 
 // ---------- local intent detection ----------
 function handleLocalIntent(text) {
-  var t = text.toLowerCase();
+  var t = text.toLowerCase().trim();
+  // Greetings
+  if (/^(hi|hello|hey|howdy|good (morning|afternoon|evening)|yo|hola|sup)[\s!?.]*$/.test(t)) {
+    var greetings = [
+      "Hey! I'm your ElectroSemi sourcing assistant. What are you building?",
+      "Hello! Need help finding parts? Tell me about your project.",
+      "Hi there! I can help you find microcontrollers, wireless modules, and more. What do you need?",
+    ];
+    var reply = greetings[Math.floor(Math.random() * greetings.length)];
+    return { reply: reply, context: "greeting" };
+  }
   // Cart queries
   if (/(check|show|view|open).*(cart|crat|basket|bag|bagn|order|oder)|what.*(in|is).*(cart|crat|basket|bag|bagn|order|oder)/.test(t)) {
     var items = [];
@@ -814,6 +830,7 @@ async function send() {
   }
 
   var indicator = addMessage("ai", typingNode());
+  indicator.classList.add("typing-active");
 
   sendBtn.disabled = true;
   inputEl.disabled = true;
@@ -829,6 +846,7 @@ async function send() {
     chatHistory.push({ role: "assistant", content: reply });
     var contentEl = mdContainer();
     indicator.replaceChild(contentEl, indicator.firstChild);
+    indicator.classList.remove("typing-active");
     typingAbort = typeText(contentEl, reply, {
       fast: reply.length > 200,
     });
@@ -846,6 +864,7 @@ async function send() {
     chatHistory.push({ role: "assistant", content: fallback });
     var contentEl = mdContainer();
     indicator.replaceChild(contentEl, indicator.firstChild);
+    indicator.classList.remove("typing-active");
     typingAbort = typeText(contentEl, fallback, {
       fast: fallback.length > 200,
     });
