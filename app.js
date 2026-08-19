@@ -50,6 +50,7 @@ let lastMsgRole = null;
 let typingAbort = null;
 let catalogActiveCategory = "all";
 let catalogSearchQuery = "";
+const intentCache = new Map();
 
 // ---------- markdown ----------
 function renderMarkdown(text) {
@@ -503,11 +504,19 @@ function filterProducts(text) {
   });
 }
 
+// ---------- intent cache ----------
+function clearCartCache() {
+  for (var key of intentCache.keys()) {
+    if (key.startsWith("cart:")) intentCache.delete(key);
+  }
+}
+
 // ---------- cart ----------
 function addToCart(p) {
   var item = cart.get(p.sku) || { sku: p.sku, name: p.name, price: p.price, qty: 0 };
   item.qty += 1;
   cart.set(p.sku, item);
+  clearCartCache();
   updateCardButtons();
   updateCart();
   flashStatus("Added " + p.sku + " to cart", "ok");
@@ -519,6 +528,7 @@ function changeQty(sku, delta) {
   if (!item) return;
   item.qty += delta;
   if (item.qty <= 0) cart.delete(sku);
+  clearCartCache();
   updateCardButtons();
   updateCart();
 }
@@ -709,7 +719,7 @@ function handleToolCalls(toolCalls) {
 function handleLocalIntent(text) {
   var t = text.toLowerCase();
   // Cart queries
-  if (/(check|show|view|open).*(cart|bag|order)|what.*(in|is).*(cart|bag|order)/.test(t)) {
+  if (/(check|show|view|open).*(cart|crat|basket|bag|bagn|order|oder)|what.*(in|is).*(cart|crat|basket|bag|bagn|order|oder)/.test(t)) {
     var items = [];
     var total = 0;
     cart.forEach(function (i) {
@@ -726,7 +736,7 @@ function handleLocalIntent(text) {
     return { reply: reply, context: "cart" };
   }
   // Stock/catalog queries
-  if (/(what.*(in stock|available|catalog|have)|show.*(catalog)|browse.*(catalog|product))/.test(t)) {
+  if (/(what.*(in stock|available|catalog|catalogue|catelog|have)|show.*(catalog|catalogue|catelog)|browse.*(catalog|catalogue|catelog|product))/.test(t)) {
     var lines = products.map(function (p) {
       var stockInfo = p.stock <= 0 ? "Out of stock" : p.stock + " in stock";
       return "- **" + p.name + "** — $" + p.price.toFixed(2) + " (" + stockInfo + ")";
@@ -753,17 +763,40 @@ async function send() {
 
   chatHistory.push({ role: "user", content: text });
 
-  // Check for local intents (cart / catalog) before hitting the backend
+  // Check for local intents (cart / catalog) — show instantly, fire backend in background
   var localResult = handleLocalIntent(text);
   if (localResult) {
-    chatHistory.push({ role: "assistant", content: localResult.reply });
+    var cacheKey = localResult.context + ":" + text;
+    var cached = intentCache.get(cacheKey);
+    var reply = cached ? cached.reply : localResult.reply;
+    var context = cached ? cached.context : localResult.context;
+
+    if (!cached) {
+      intentCache.set(cacheKey, { reply: reply, context: context });
+    }
+
+    chatHistory.push({ role: "assistant", content: reply });
     var indicator = addMessage("ai", mdContainer());
-    typingAbort = typeText(indicator.querySelector(".md-content"), localResult.reply, { fast: true });
-    addSuggestions(indicator, localResult.context);
+    typingAbort = typeText(indicator.querySelector(".md-content"), reply, { fast: true });
+    addSuggestions(indicator, context);
     lastMsgRole = "ai";
     sendBtn.disabled = false;
     inputEl.disabled = false;
     inputEl.focus();
+
+    // Fire backend in background, replace bubble if it responds
+    chatWithBackend(text).then(function (result) {
+      if (result.text && result.text.trim()) {
+        var newReply = result.text.trim();
+        var mdEl = indicator.querySelector(".md-content");
+        if (mdEl) {
+          mdEl.innerHTML = renderMarkdown(newReply);
+          chatHistory[chatHistory.length - 1].content = newReply;
+          intentCache.set(cacheKey, { reply: newReply, context: context });
+        }
+      }
+    }).catch(function () {});
+
     return;
   }
 
