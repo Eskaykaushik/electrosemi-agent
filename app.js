@@ -566,6 +566,13 @@ function buildQtyControls(wrap, sku, name) {
   var item = cart.get(sku);
   count.textContent = item ? item.qty : 0;
   count.setAttribute("aria-label", "Quantity: " + (item ? item.qty : 0));
+  count.classList.remove("qty-glow");
+  void count.offsetWidth;
+  count.classList.add("qty-glow");
+  count.addEventListener("animationend", function handler() {
+    count.classList.remove("qty-glow");
+    count.removeEventListener("animationend", handler);
+  });
   var plus = document.createElement("button");
   plus.className = "btn qty-plus";
   plus.textContent = "+";
