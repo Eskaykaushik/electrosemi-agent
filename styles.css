@@ -762,6 +762,35 @@ html, body {
   font-size: 12px;
   padding: 5px 0;
 }
+.catalog-card .card-action {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.catalog-card .card-action .btn.add {
+  margin-top: 0;
+  width: 100%;
+}
+.catalog-card .qty-minus,
+.catalog-card .qty-plus {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  font-size: 14px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.catalog-card .qty-count {
+  min-width: 24px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+}
 .catalog-empty {
   padding: 32px 16px;
   text-align: center;
@@ -772,7 +801,7 @@ html, body {
   0%   { box-shadow: 0 0 0 2px var(--accent); }
   100% { box-shadow: none; }
 }
-.catalog-card .btn.add.flash {
+.catalog-card .card-action.flash {
   animation: addedFlash .5s ease;
 }
 

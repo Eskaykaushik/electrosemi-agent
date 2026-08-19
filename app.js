@@ -405,24 +405,26 @@ function renderCatalogGrid() {
         '<span class="price">$' + p.price.toFixed(2) + '</span>' +
         '<span class="stock ' + stockCls + '">' + getStockLabel(p.stock) + '</span>' +
       '</div>';
-    var add = document.createElement("button");
-    add.className = "btn add";
+    var actionWrap = document.createElement("div");
+    actionWrap.className = "card-action";
     var inCart = cart.get(p.sku);
     if (inCart && inCart.qty > 0) {
-      add.textContent = "In cart (\u00B7 " + inCart.qty + ")";
-      add.classList.add("in-cart");
+      buildQtyControls(actionWrap, p.sku, p.name);
     } else {
+      var add = document.createElement("button");
+      add.className = "btn add";
       add.textContent = "Add to cart";
+      add.setAttribute("aria-label", "Add " + p.name + " to cart");
+      add.addEventListener("click", function () {
+        addToCart(p);
+        renderCatalogGrid();
+        var newBtn = catalogGrid.querySelector('[data-sku="' + p.sku + '"] .card-action');
+        if (newBtn) { newBtn.classList.add("flash"); }
+      });
+      actionWrap.appendChild(add);
     }
-    add.setAttribute("aria-label", "Add " + p.name + " to cart");
-    add.addEventListener("click", function () {
-      addToCart(p);
-      renderCatalogGrid();
-      var newBtn = catalogGrid.querySelector('[data-sku="' + p.sku + '"] .btn.add');
-      if (newBtn) { newBtn.classList.add("flash"); }
-    });
-    cardButtons.set(p.sku, add);
-    card.appendChild(add);
+    cardButtons.set(p.sku, actionWrap);
+    card.appendChild(actionWrap);
     catalogGrid.appendChild(card);
   });
   announce(list.length + " products shown in catalog");
@@ -552,17 +554,47 @@ function changeQty(sku, delta) {
   updateCart();
 }
 
+function buildQtyControls(wrap, sku, name) {
+  wrap.innerHTML = "";
+  var minus = document.createElement("button");
+  minus.className = "btn qty-minus";
+  minus.textContent = "\u2212";
+  minus.setAttribute("aria-label", "Decrease quantity of " + name);
+  minus.addEventListener("click", function () { changeQty(sku, -1); });
+  var count = document.createElement("span");
+  count.className = "qty-count";
+  var item = cart.get(sku);
+  count.textContent = item ? item.qty : 0;
+  count.setAttribute("aria-label", "Quantity: " + (item ? item.qty : 0));
+  var plus = document.createElement("button");
+  plus.className = "btn qty-plus";
+  plus.textContent = "+";
+  plus.setAttribute("aria-label", "Increase quantity of " + name);
+  plus.addEventListener("click", function () { changeQty(sku, 1); });
+  wrap.append(minus, count, plus);
+}
+
 function updateCardButtons() {
   for (var entry of cardButtons) {
-    var sku = entry[0], btn = entry[1];
+    var sku = entry[0], wrap = entry[1];
     var item = cart.get(sku);
     if (item && item.qty > 0) {
-      btn.textContent = "In cart (\u00B7 " + item.qty + ")";
-      btn.classList.add("in-cart");
-      btn.setAttribute("aria-label", btn.getAttribute("aria-label").replace("Add ", "Add ") + " (already in cart, qty " + item.qty + ")");
+      var product = products.find(function (p) { return p.sku === sku; });
+      var name = product ? product.name : sku;
+      buildQtyControls(wrap, sku, name);
     } else {
-      btn.textContent = "Add to cart";
-      btn.classList.remove("in-cart");
+      wrap.innerHTML = "";
+      var add = document.createElement("button");
+      add.className = "btn add";
+      add.textContent = "Add to cart";
+      add.setAttribute("aria-label", "Add to cart");
+      (function (s) {
+        add.addEventListener("click", function () {
+          var p = products.find(function (x) { return x.sku === s; });
+          if (p) addToCart(p);
+        });
+      })(sku);
+      wrap.appendChild(add);
     }
   }
 }
