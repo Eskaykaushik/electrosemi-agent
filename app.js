@@ -256,9 +256,18 @@ function renderInlineChips(chips) {
 }
 
 // ---------- post-reply suggestions ----------
-function addSuggestions(msgEl) {
-  var suggestions = renderInlineChips(["Browse catalog", "Add to cart", "Get a quote"]);
-  msgEl.appendChild(suggestions);
+function addSuggestions(msgEl, context) {
+  var chips;
+  if (context === "cart") {
+    chips = ["View cart", "Continue shopping", "Submit order"];
+  } else if (context === "catalog") {
+    chips = ["Add to cart", "Show more", "Get a quote"];
+  } else if (context === "empty") {
+    chips = ["Browse catalog", "What's in stock?"];
+  } else {
+    chips = ["Browse catalog", "Add to cart", "Get a quote"];
+  }
+  msgEl.appendChild(renderInlineChips(chips));
 }
 
 // ---------- welcome screen ----------
@@ -696,6 +705,39 @@ function handleToolCalls(toolCalls) {
   });
 }
 
+// ---------- local intent detection ----------
+function handleLocalIntent(text) {
+  var t = text.toLowerCase();
+  // Cart queries
+  if (/(check|show|view|open).*(cart|bag|order)|what.*(in|is).*(cart|bag|order)/.test(t)) {
+    var items = [];
+    var total = 0;
+    cart.forEach(function (i) {
+      items.push("- " + i.name + " x" + i.qty + " ($" + (i.price * i.qty).toFixed(2) + ")");
+      total += i.price * i.qty;
+    });
+    var reply;
+    if (items.length === 0) {
+      reply = "Your cart is empty. Want to browse the catalog?";
+    } else {
+      reply = "Here's your cart:\n\n" + items.join("\n") + "\n\n**Total: $" + total.toFixed(2) + "**";
+    }
+    openCart();
+    return { reply: reply, context: "cart" };
+  }
+  // Stock/catalog queries
+  if (/(what.*(in stock|available|catalog|have)|show.*(catalog)|browse.*(catalog|product))/.test(t)) {
+    var lines = products.map(function (p) {
+      var stockInfo = p.stock <= 0 ? "Out of stock" : p.stock + " in stock";
+      return "- **" + p.name + "** — $" + p.price.toFixed(2) + " (" + stockInfo + ")";
+    });
+    var reply = "Here's what we have in stock:\n\n" + lines.join("\n");
+    openCatalog();
+    return { reply: reply, context: "catalog" };
+  }
+  return null;
+}
+
 // ---------- events ----------
 async function send() {
   var text = inputEl.value.trim();
@@ -711,6 +753,20 @@ async function send() {
 
   chatHistory.push({ role: "user", content: text });
 
+  // Check for local intents (cart / catalog) before hitting the backend
+  var localResult = handleLocalIntent(text);
+  if (localResult) {
+    chatHistory.push({ role: "assistant", content: localResult.reply });
+    var indicator = addMessage("ai", mdContainer());
+    typingAbort = typeText(indicator.querySelector(".md-content"), localResult.reply, { fast: true });
+    addSuggestions(indicator, localResult.context);
+    lastMsgRole = "ai";
+    sendBtn.disabled = false;
+    inputEl.disabled = false;
+    inputEl.focus();
+    return;
+  }
+
   var indicator = addMessage("ai", typingNode());
 
   sendBtn.disabled = true;
@@ -718,7 +774,12 @@ async function send() {
 
   try {
     var result = await chatWithBackend(text);
-    var reply = result.text;
+    var reply = (result.text || "").trim();
+    var suggestionContext;
+    if (!reply) {
+      reply = "Sorry, I didn't quite catch that. Could you rephrase?";
+      suggestionContext = "empty";
+    }
     chatHistory.push({ role: "assistant", content: reply });
     var contentEl = mdContainer();
     indicator.replaceChild(contentEl, indicator.firstChild);
@@ -729,7 +790,7 @@ async function send() {
       if (typingAbort && !typingAbort.isDone()) typingAbort.skip();
       indicator.removeEventListener("click", handler);
     });
-    addSuggestions(indicator);
+    addSuggestions(indicator, suggestionContext);
     if (result.toolCalls.length) {
       handleToolCalls(result.toolCalls);
     }
