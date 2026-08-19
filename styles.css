@@ -293,10 +293,9 @@ html, body {
   border-radius: 6px;
 }
 .md-content table {
-  width: 100%;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 12px;
-  table-layout: auto;
 }
 .md-content thead th {
   background: var(--panel-3);
