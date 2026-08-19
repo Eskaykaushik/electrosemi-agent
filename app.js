@@ -99,6 +99,7 @@ function typeText(el, fullText, opts) {
       aborted = true;
       clearTimeout(typingTimeout);
       el.innerHTML = renderMarkdown(fullText);
+      checkAutoScroll();
       done = true;
     },
     isDone: function () { return done; },
@@ -303,6 +304,18 @@ function removeWelcome() {
   var w = document.getElementById("welcomeScreen");
   if (w) w.remove();
   chatStarted = true;
+}
+
+function newChat() {
+  if (typingAbort && !typingAbort.isDone()) typingAbort.skip();
+  chatHistory.length = 0;
+  messagesEl.innerHTML = "";
+  chatStarted = false;
+  lastMsgRole = null;
+  renderWelcome();
+  closeCart();
+  closeCatalog();
+  announce("New chat started");
 }
 
 // ---------- catalog drawer ----------
@@ -782,7 +795,6 @@ async function send() {
     lastMsgRole = "ai";
     sendBtn.disabled = false;
     inputEl.disabled = false;
-    inputEl.focus();
 
     // Fire backend in background, replace bubble if it responds
     chatWithBackend(text).then(function (result) {
@@ -793,6 +805,7 @@ async function send() {
           mdEl.innerHTML = renderMarkdown(newReply);
           chatHistory[chatHistory.length - 1].content = newReply;
           intentCache.set(cacheKey, { reply: newReply, context: context });
+          checkAutoScroll();
         }
       }
     }).catch(function () {});
@@ -910,6 +923,8 @@ cartForm.addEventListener("submit", function (e) {
   renderWelcome();
   updateCart();
 })();
+
+document.querySelector(".brand").addEventListener("click", newChat);
 
 // ---------- iOS keyboard handling ----------
 // On iOS Safari, 100dvh includes the area behind the URL bar and virtual

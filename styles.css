@@ -73,7 +73,7 @@ html, body {
   flex-shrink: 0;
 }
 
-.brand { display: flex; align-items: center; gap: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .brand h1 {
   font-size: 13px;
   font-weight: 600;
